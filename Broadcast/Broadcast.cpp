@@ -13,10 +13,14 @@
 int initWS();
 int setSocketOption();
 void printer(std::string msg);
+void tcpHandler();
 
 // Переменные
+std::string message;
 char buffer[BUFFER_SIZE];
 SOCKET sock;
+sockaddr_in local_addr, other_addr;
+SOCKET clients[100];
 
 int main()
 {
@@ -39,7 +43,6 @@ int main()
     }
     printer("Установка прошла успешна!");
 
-    sockaddr_in local_addr, other_addr;
     int stuctureLength = sizeof(sockaddr);
 
     local_addr.sin_family = AF_INET;
@@ -53,7 +56,9 @@ int main()
     printer("Связывание прошло успешно!");
     printer("Ждём сообщения");
 
-    std::string message = "TCP Соединение успешно создано!";
+    message = "TCP Соединение успешно создано!";
+
+    HANDLE tcpSender = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)tcpHandler, NULL, NULL, NULL);
 
     while (true) {
         recvfrom(sock, buffer, BUFFER_SIZE, 0, (sockaddr*)&other_addr, &stuctureLength);
@@ -62,23 +67,9 @@ int main()
             sendto(sock, message.c_str(), message.size(), 0, (sockaddr*)&other_addr, sizeof(other_addr));
         }
         if (answer == "C") {
-            sendto(sock, "OK", 3, 0, (sockaddr*)&other_addr, sizeof(other_addr));
-            SOCKET tcp_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-            if (bind(tcp_sock, (sockaddr*)&local_addr, sizeof(local_addr)) == SOCKET_ERROR)
-            {
-                std::cout << "Ошибка: Возникли проблемы при связывании сокета...";
-            }
-            if (listen(tcp_sock, SOMAXCONN) != 0) {
-                std::cout << "Ошибка: Прослушка не удалась";
-            }
-            SOCKET newClient = accept(tcp_sock, NULL, NULL);
-            send(newClient, message.c_str(), message.size(), 0);
+            sendto(sock, "OK", 3, 0, (sockaddr*)&other_addr, sizeof(other_addr));    
         }
-    }
-    // Приёмка сообщения
-
-    // Отправка
-    
+    } 
 
     closesocket(sock);
     WSACleanup();
@@ -97,4 +88,22 @@ int setSocketOption() {
 
 void printer(std::string msg) {
     std::cout << msg << std::endl;
+}
+
+void tcpHandler() {
+    SOCKET tcp_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (bind(tcp_sock, (sockaddr*)&local_addr, sizeof(local_addr)) == SOCKET_ERROR)
+    {
+        std::cout << "Ошибка: Возникли проблемы при связывании сокета...";
+    }
+    if (listen(tcp_sock, SOMAXCONN) != 0) {
+        std::cout << "Ошибка: Прослушка не удалась";
+    }
+    char ipAddress[256];
+    for (int i = 0; i < 100; i++) {
+        SOCKET newClient = accept(tcp_sock, NULL, NULL);
+        send(newClient, message.c_str(), message.size(), 0);
+        std::cout << "Клиент: подключился\n";
+        clients[i] = newClient;
+    }
 }
