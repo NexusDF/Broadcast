@@ -16,6 +16,7 @@ void printer(std::string msg);
 void tcpHandler();
 
 // Переменные
+int counter = 0;
 std::string message;
 char buffer[BUFFER_SIZE];
 SOCKET sock;
@@ -90,6 +91,12 @@ void printer(std::string msg) {
     std::cout << msg << std::endl;
 }
 
+void clientHandler(int index) {
+    send(clients[index], "Ас-саляму алейкум", 64, 0);
+    recv(clients[index], buffer, BUFFER_SIZE, 0);
+    std::cout << buffer;
+}
+
 void tcpHandler() {
     SOCKET tcp_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (bind(tcp_sock, (sockaddr*)&local_addr, sizeof(local_addr)) == SOCKET_ERROR)
@@ -105,5 +112,7 @@ void tcpHandler() {
         send(newClient, message.c_str(), message.size(), 0);
         std::cout << "Клиент: подключился\n";
         clients[i] = newClient;
+        counter++;
+        CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)clientHandler, (LPVOID)(i), NULL, NULL);
     }
 }
