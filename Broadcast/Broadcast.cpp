@@ -1,6 +1,7 @@
 ﻿// Broadcast.cpp : Этот файл содержит функцию "main". Здесь начинается и заканчивается выполнение программы.
 #include <iostream>
 #include <WS2tcpip.h>
+#include <algorithm>
 #include <vector>
 
 #pragma comment (lib, "ws2_32.lib")
@@ -26,6 +27,7 @@ bool start = false;
 SOCKET sock;
 sockaddr_in local_addr, other_addr;
 SOCKET clients[10];
+int score[10];
 
 struct Quest {
 public:
@@ -39,10 +41,10 @@ public:
 
 std::vector<Quest> question = {
     Quest("Длина китайской стены", 21196),
-    Quest("Год смерти Иосифа Сталина", 1953),
-    Quest("Дата окончания 1 мировой войны", 1918),
-    Quest("Год развала СССР", 1991),
-    Quest("Расстояние от Земли до Луны", 384400)
+    Quest("Год смерти Иосифа Сталина", 1953)
+    //Quest("Дата окончания 1 мировой войны", 1918),
+    //Quest("Год развала СССР", 1991),
+    //Quest("Расстояние от Земли до Луны", 384400)
 };
 
 int main()
@@ -125,41 +127,95 @@ void clientHandler(int index) {
     }
 }
 
+struct Max {
+public:
+    Max(int index, int max) {
+        this->index = index;
+        this->max = max;
+    }
+    int index;
+    int max;
+};
+
+bool mysort(Max i, Max j) {
+    return (i.max < j.max);
+}
+
 void game() {
+    int r = 0;
+    bool first = true;
+    std::vector<Max> maximus;
     while (true) {
         if (!start) continue;
         running = false;
 
-        for (int i = 0; i < counter; i++) {
-            send(clients[i], "OK", 3, 0);
+        maximus.clear();
+
+        r = rand() % question.size();
+
+        if (first) {
+            for (int i = 0; i < counter; i++) {
+                send(clients[i], "OK", 3, 0);
+            }
         }
 
         int answer[10];
-        for (auto const& q : question) {
-            for (int i = 0; i < counter; i++) {
-                send(clients[i], q.quest.c_str(), q.quest.size(), 0);
-                recv(clients[i], (char*)&answer[i], sizeof(int), 0);
-            }
-            int max = 999999999;
-            int index_max = 0;
-            for (int j = 0; j < counter; j++) {
-                if (abs(q.answer - answer[j]) < max) {
-                    max = abs(q.answer - answer[j]);
-                    index_max = j;
-                }
-            }
-            for (int k = 0; k < counter; k++) {
-                if (k == index_max) {
-                    send(clients[k], "You win son!", 13, 0);
+        
+        for (int i = 0; i < counter; i++) {
+            send(clients[i], question[r].quest.c_str(), question[r].quest.size(), 0);
+            recv(clients[i], (char*)&answer[i], sizeof(int), 0);
+        }
+        int max = 999999999;
+        int index_max = 0;
+        for (int j = 0; j < counter; j++) {
+            max = abs(question[r].answer - answer[j]);
+            if (max == 0) score[j] += 2;
+            maximus.push_back(Max(j, max));    // [2] [1] [1]  -> [1] [1] [1] [2] [2] [3]
+            index_max = j;
+        }
+
+        std::sort(maximus.begin(), maximus.end(), mysort);
+        if (maximus[0].max == 0) {
+            send(clients[maximus[0].index], "You win son!", 13, 0);
+            score[maximus[0].index] += 1;
+            for (int x = 1; x < maximus.size(); x++) {
+
+                if (maximus[0].max == maximus[x].max) {
+                    send(clients[maximus[x].index], "You win son!", 13, 0);
+                    score[maximus[x].index] += 1;
                 }
                 else {
-                    send(clients[k], "You lose fckn slave", 20, 0);
+                    send(clients[maximus[x].index], "You lose fckn slave", 20, 0);
                 }
-            }
 
+            }
         }
+        else {
+            send(clients[maximus[0].index], "Ты был близок", 13, 0);
+            score[maximus[0].index] += 1;
+            for (int x = 1; x < maximus.size(); x++) {
+
+                if (maximus[0].max == maximus[x].max) {
+                    send(clients[maximus[x].index], "Ты был близок", 13, 0);
+                    score[maximus[x].index] += 1;
+                }
+                else {
+                    send(clients[maximus[x].index], "You lose fckn slave", 20, 0);
+                }
+
+            }
+        }
+        
+        question.erase(question.begin() + r);
+        first = false;
+        if (question.size() <= 0) break;
     }
-    
+
+    for (int i = 0; i < counter; i++) {
+        send(clients[i], "END", 4, 0);
+        Sleep(1000);
+        send(clients[i], (char*)&score[i], sizeof(int), 0);
+    }
 }
 
 void tcpHandler() {
