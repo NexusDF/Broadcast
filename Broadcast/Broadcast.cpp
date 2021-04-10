@@ -1,11 +1,12 @@
 ﻿// Broadcast.cpp : Этот файл содержит функцию "main". Здесь начинается и заканчивается выполнение программы.
 #include <iostream>
 #include <WS2tcpip.h>
+#include <vector>
 
 #pragma comment (lib, "ws2_32.lib")
 
 // Константы
-#define PORT 25565
+#define PORT 2620
 #define BUFFER_SIZE 8192
 
 
@@ -14,14 +15,35 @@ int initWS();
 int setSocketOption();
 void printer(std::string msg);
 void tcpHandler();
+void game();
 
 // Переменные
 int counter = 0;
 std::string message;
 char buffer[BUFFER_SIZE];
+bool running = true;
+bool start = false;
 SOCKET sock;
 sockaddr_in local_addr, other_addr;
-SOCKET clients[100];
+SOCKET clients[10];
+
+struct Quest {
+public:
+    Quest(std::string q, int a) {
+        quest = q;
+        answer = a;
+    }
+    std::string quest;
+    int answer;
+};
+
+std::vector<Quest> question = {
+    Quest("Длина китайской стены", 21196),
+    Quest("Год смерти Иосифа Сталина", 1953),
+    Quest("Дата окончания 1 мировой войны", 1918),
+    Quest("Год развала СССР", 1991),
+    Quest("Расстояние от Земли до Луны", 384400)
+};
 
 int main()
 {
@@ -60,8 +82,9 @@ int main()
     message = "TCP Соединение успешно создано!";
 
     HANDLE tcpSender = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)tcpHandler, NULL, NULL, NULL);
+    CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)game, NULL, NULL, NULL);
 
-    while (true) {
+    while (running) {
         recvfrom(sock, buffer, BUFFER_SIZE, 0, (sockaddr*)&other_addr, &stuctureLength);
         std::string answer = std::string(buffer);
         if (answer == "R") {
@@ -92,9 +115,51 @@ void printer(std::string msg) {
 }
 
 void clientHandler(int index) {
-    send(clients[index], "Ас-саляму алейкум", 18, 0);
     recv(clients[index], buffer, BUFFER_SIZE, 0);
-    std::cout << buffer;
+    if (std::string(buffer) == "S" && counter > 0 && counter < 11) {
+        start = true;
+        for (int i = 0; i < counter; i++) {
+            if (i == index) continue;
+            send(clients[i], "START", 6, 0);
+        }
+    }
+}
+
+void game() {
+    while (true) {
+        if (!start) continue;
+        running = false;
+
+        for (int i = 0; i < counter; i++) {
+            send(clients[i], "OK", 3, 0);
+        }
+
+        int answer[10];
+        for (auto const& q : question) {
+            for (int i = 0; i < counter; i++) {
+                send(clients[i], q.quest.c_str(), q.quest.size(), 0);
+                recv(clients[i], (char*)&answer[i], sizeof(int), 0);
+            }
+            int max = 999999999;
+            int index_max = 0;
+            for (int j = 0; j < counter; j++) {
+                if (abs(q.answer - answer[j]) < max) {
+                    max = abs(q.answer - answer[j]);
+                    index_max = j;
+                }
+            }
+            for (int k = 0; k < counter; k++) {
+                if (k == index_max) {
+                    send(clients[k], "You win son!", 13, 0);
+                }
+                else {
+                    send(clients[k], "You lose fckn slave", 20, 0);
+                }
+            }
+
+        }
+    }
+    
 }
 
 void tcpHandler() {
@@ -106,13 +171,15 @@ void tcpHandler() {
     if (listen(tcp_sock, SOMAXCONN) != 0) {
         std::cout << "Ошибка: Прослушка не удалась";
     }
+
+    
     char ipAddress[256];
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 10; i++) {
         SOCKET newClient = accept(tcp_sock, NULL, NULL);
-        send(newClient, message.c_str(), message.size(), 0);
         std::cout << "Клиент: подключился\n";
         clients[i] = newClient;
         counter++;
         CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)clientHandler, (LPVOID)(i), NULL, NULL);
     }
 }
+
