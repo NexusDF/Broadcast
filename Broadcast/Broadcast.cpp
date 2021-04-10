@@ -65,7 +65,7 @@ int main()
         recvfrom(sock, buffer, BUFFER_SIZE, 0, (sockaddr*)&other_addr, &stuctureLength);
         std::string answer = std::string(buffer);
         if (answer == "R") {
-            sendto(sock, message.c_str(), message.size(), 0, (sockaddr*)&other_addr, sizeof(other_addr));
+            sendto(sock, (char*)&counter, sizeof(int), 0, (sockaddr*)&other_addr, sizeof(other_addr));
         }
         if (answer == "C") {
             sendto(sock, "OK", 3, 0, (sockaddr*)&other_addr, sizeof(other_addr));    
@@ -92,7 +92,7 @@ void printer(std::string msg) {
 }
 
 void clientHandler(int index) {
-    send(clients[index], "Ас-саляму алейкум", 64, 0);
+    send(clients[index], "Ас-саляму алейкум", 18, 0);
     recv(clients[index], buffer, BUFFER_SIZE, 0);
     std::cout << buffer;
 }
